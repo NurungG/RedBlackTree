@@ -47,12 +47,20 @@ struct rb_tree_s {
 	struct rb_node_s *root;
 };
 
+typedef struct log_s log_t;
+typedef struct log_node_s log_node_t;
+typedef struct log_list_s log_list_t;
+
 typedef struct member_s member_t;
 typedef struct rb_node_s rb_node_t;
 typedef struct rb_tree_s rb_tree_t;
 
 
 /* Declare functions */
+log_list_t *log_create();
+log_node_t *log_create_node();
+void log_insert(log_list_t *list, log_t value);
+
 rb_tree_t	*rb_create();
 rb_node_t	*rb_create_node();
 void		rb_insert(rb_tree_t *tree, member_t value);
@@ -115,6 +123,37 @@ int main() {
 }
 
 /* Function implementation */
+log_list_t *log_create() {
+	log_list_t *list = NULL;
+	
+	if ((list = malloc(sizeof(log_list_t))) == NULL) {
+		return NULL;
+	}
+
+	list->head = NULL;
+}
+
+log_node_t *log_create_node() {
+	log_node_t *node = NULL;
+
+	if ((node = malloc(sizeof(log_node_t))) == NULL) {
+		return NULL;
+	}
+
+	node->next = NULL;
+	// memset(&node->value, 0, sizeof(log_t));
+}
+
+void log_insert(log_list_t *list, log_t value) {
+	log_node_t *node;
+
+	node = log_create_node();
+	node->value = value;
+
+	node->next = list->head;
+	list->head = node;
+}
+
 rb_tree_t *rb_create() {
 	rb_tree_t *tree = NULL;
 	
@@ -148,7 +187,7 @@ void rb_insert(rb_tree_t *tree, member_t value) {
 	rb_node_t *vacant;
 	rb_node_t *parent;
 
-	if (tree->root == NULL) {
+	if (tree->root == NULL) { // case of empty
 		root = rb_create_node();
 		root->value = value;
 		root->color = BLACK;
