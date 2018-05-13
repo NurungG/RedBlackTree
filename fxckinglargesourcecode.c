@@ -1,15 +1,18 @@
 /* Includes */
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 /* Defines */
-#define RED     0
-#define BLACK   1
+#define EXIT_STATUS     0
+#define CONTINUE        1
 
-#define DOWN    0
-#define UP      1
+#define RED             0
+#define BLACK           1
+
+#define UP              1
+#define DOWN            0
 
 
 /* Structures */
@@ -66,10 +69,13 @@ typedef struct rb_tree_s rb_tree_t;
 
 
 /* Declare functions */
-log_list_t *log_create();
-log_node_t *log_create_node();
-void        log_insert(log_list_t *list, log_t value);
 
+// Log(list) implementation
+log_list_t     *log_create();
+log_node_t     *log_create_node();
+void            log_insert(log_list_t *list, log_t value);
+
+// Red-Black Tree implementation
 rb_tree_t      *rb_create();
 rb_node_t      *rb_create_node();
 unsigned int    rb_insert(rb_tree_t *tree, member_t value);
@@ -80,66 +86,350 @@ int             rb_treaverse_node_dfs(rb_node_t *node, int depth);
 void            rb_treaverse_dfs(rb_tree_t *tree);
 int             rb_find(rb_tree_t *tree, int id, rb_node_t **node);
 
-int  execute_operation(rb_tree_t *tree, char op);
-void op_join_member(rb_tree_t *tree);
-void op_print_info(rb_tree_t *tree);
-void op_add_cash(rb_tree_t *tree);
-void op_find_top_five(rb_tree_t *tree);
-void op_print_log(rb_tree_t *tree);
-void op_buy_area(rb_tree_t *tree);
+// Execute wrapper functions
+int             execute_operation(rb_tree_t *tree, char op);
+void            op_join_member(rb_tree_t *tree);
+void            op_print_info(rb_tree_t *tree);
+void            op_add_cash(rb_tree_t *tree);
+void            op_find_top_five(rb_tree_t *tree);
+void            op_print_log(rb_tree_t *tree);
+void            op_buy_area(rb_tree_t *tree);
+
+// Main wrapper functions
+void            Init();
+int             Setup();
+void            Execute();
+
 
 /* Global variables */
-int area_price[1001][1001];
-int area_owner[1001][1001];
+rb_tree_t      *all_members;
+int             area_price[1001][1001];
+int             area_owner[1001][1001];
+
 
 /* Main function */
 int main() {
+    Init();
+    
+    Setup();
+
+    Execute();
+    return 0;
+}
+
+
+/* Function implementation */
+void Init() {
+    // Initiate global variables
+
+    all_members = rb_create();
+    memset(area_owner, -1, 1001 * 1001 * sizeof(int));
+}
+
+int Setup() {
+    // Setup existing members from member-list file
+
     char filename[1024];
     FILE *input;
-    
-    rb_tree_t *tree;
-    char op;
+    member_t new_member;
 
-    memset(area_owner, -1, 1001 * 1001 * sizeof(int));
-
-    // File in
     fputs("입력파일의 이름을 입력하세요 : ", stdout);
     fgets(filename, 1024, stdin);
 
     filename[strlen(filename)-1] = 0;
-    input = fopen(filename, "r");
-    if (input != NULL) {
-        tree = rb_create();
 
-        while (1) {
-            member_t new_member;
-            int ret;
-
-            ret = fscanf(input, "%d %s %s %d %d %d %d",
-                    &new_member.id, new_member.name, new_member.phone,
-                    &new_member.x, &new_member.y, &new_member.level, &new_member.money);
-            
-            if (ret < 0) break;
-            
-            rb_insert(tree, new_member);
-            area_owner[new_member.x][new_member.y] = new_member.id;
-        }
-        fclose(input);
-    } // file input end 
-
-    //puts("file setup finished");
-    
-    while (1) {
-        scanf("%c", &op);
-        if (execute_operation(tree, op) == 0) {
-            break;
-        }
+    if ((input = fopen(filename, "r")) == NULL) {
+        fputs("fopen() error\n", stderr);
+        exit(1);
     }
 
+    while (1) {
+        if ( fscanf(input, "%d %s %s %d %d %d %d",
+                &new_member.id, new_member.name, new_member.phone,
+                &new_member.x, &new_member.y, &new_member.level, &new_member.money) < 0 ) {
+            break;
+        }
+        
+        rb_insert(all_members, new_member);
+        area_owner[new_member.x][new_member.y] = new_member.id;
+    }
+
+    fclose(input);
     return 0;
 }
 
-/* Function implementation */
+void Execute() {
+    // Execute queries
+
+    char op;
+    while (1) {
+        scanf("%c", &op);
+        if (execute_operation(all_members, op) == EXIT_STATUS) {
+            break;
+        }
+    }
+}
+
+int execute_operation(rb_tree_t *tree, char op) {
+    // Execute an operation (by translating a query)
+    
+    switch (op) {
+    case 'I' : // join
+        op_join_member(tree);
+        break;
+
+    case 'P' : // print
+        op_print_info(tree);
+        break;
+
+    case 'A' : // add
+        op_add_cash(tree);
+        break;
+
+    case 'F' : // rank
+        op_find_top_five(tree);
+        break;
+
+    case 'R' : // log
+        op_print_log(tree);
+        break;
+
+    case 'B' : // buy
+        op_buy_area(tree);
+        break;
+
+    case 'Q' : // exit
+        return EXIT_STATUS;
+
+    default :
+        printf("Invalid operation %c\n", op);
+    }
+
+    return CONTINUE;
+}
+
+void op_join_member(rb_tree_t *tree) {
+    // Join to this program
+
+    member_t new_member;
+    unsigned int ret;
+    int depth, approval;
+    
+    scanf("%d %s %s %d %d",
+        &new_member.id, new_member.name, new_member.phone, &new_member.x, &new_member.y);
+
+    new_member.level = 0;
+    new_member.money = 0;
+
+    ret = rb_insert(tree, new_member); // return value includes both depth and approval
+    
+    depth = ret & 0x7fffffff; // Least bits are depth
+
+    if ((ret & 0x80000000) == 0) { // Most bit is approval
+        approval = 0;
+    } else {
+        approval = 1;
+
+        // If there is no owner in starting area, it becomes belonging of him(or her)
+        if (area_owner[new_member.x][new_member.y] == -1) {
+            area_owner[new_member.x][new_member.y] = new_member.id;
+        }
+    }
+
+    printf("%d %d\n", depth, approval);
+}
+
+void op_print_info(rb_tree_t *tree) {
+    // Print information of the member
+
+    int id, depth;
+    rb_node_t *node;
+    member_t member;
+    
+    scanf("%d", &id);
+
+    if ((depth = rb_find(tree, id, &node)) == -1) {
+        puts("Not found!");
+
+    } else {            
+        member = node->value;
+        printf("%s %s %d %d %d\n",
+            member.name, member.phone, member.level, member.money, depth);
+    }
+}
+
+void set_level(member_t *member) {
+    // Set the level depending on current money
+
+    if (member->money < 30000) {
+        member->level = 0;
+
+    } else if (member->money < 50000) {
+        member->level = 1;
+
+    } else if (member->money < 100000) {
+        member->level = 2;
+
+    } else {
+        member->level = 3;
+    } 
+}
+
+void op_add_cash(rb_tree_t *tree) {
+    // Add cash to the account
+
+    int id, amount, depth;
+    rb_node_t *node;
+    log_t log;
+
+    scanf("%d %d", &id, &amount);
+
+    if ((depth = rb_find(tree, id, &node)) == -1) {
+        puts("Not found!");
+
+    } else {
+        node->value.money += amount;        
+        set_level(&node->value);
+
+        log = (log_t){ UP, amount };
+        log_insert(node->value.log, log);
+
+        printf("%d %d\n", depth, node->value.level);
+    }
+}
+
+
+// TODO
+void treaverse_dfs_node(rb_node_t *node, int *id, int *money) {
+    int i;
+
+    if (node == NULL) return;
+
+    treaverse_dfs_node(node->left, id, money);
+    
+    if (money[4] < node->value.money) {
+        id[4]    = node->value.id;
+        money[4] = node->value.money;
+        
+        for (int i = 4; i > 0; i--) {
+            if (money[i-1] < money[i]) {
+                int tmp_id, tmp_money;
+                tmp_id    = id[i];
+                tmp_money = money[i];
+
+                id[i]    = id[i-1];
+                money[i] = money[i-1];
+
+                id[i-1]    = tmp_id;
+                money[i-1] = tmp_money;
+
+            } else {
+                break;
+            }
+        }
+    }
+
+    treaverse_dfs_node(node->right, id, money);
+}
+
+// TODO : improve time complexity from O(n) -> O(log n) or O(1)
+// its a bottleneck
+void op_find_top_five(rb_tree_t *tree) {
+    int id[5], money[5];
+    int i;
+
+    memset(id, 0, 5 * sizeof(int));
+    memset(money, 0, 5 * sizeof(int));
+    
+    treaverse_dfs_node(tree->root, id, money);
+
+    for (i = 0; i < 5; i++) {
+        if (id[i] == 0) break;
+
+        printf("%d %d\n", id[i], money[i]);
+    }
+
+    if (i == 0) {
+        puts("Not found!");
+    }
+}
+
+void op_print_log(rb_tree_t *tree) {
+    // Print log of the account
+
+    int id, log_amount;
+    rb_node_t *node;
+    log_node_t *log;
+    int i;
+
+    scanf("%d %d", &id, &log_amount);
+
+    if (rb_find(tree, id, &node) == -1) {
+        puts("Not found!");
+        return;
+    }
+
+    log = node->value.log->head;
+    for (i = 0; i < log_amount; i++) {
+        if (log == NULL) break;
+
+        printf("%d %d\n", log->value.updown, log->value.amount);
+        
+        log = log->next;
+    }
+
+    if (i == 0) {
+        puts("0");
+    }
+}
+
+void op_buy_area(rb_tree_t *tree) {
+    // Buy the area for the price(or more)
+
+    int id, x, y, spent;
+    rb_node_t *node, *origin;
+    int approval = 0;
+    log_t log;
+
+    scanf("%d %d %d %d", &id, &x, &y, &spent); 
+
+    if (rb_find(tree, id, &node) == -1) {
+        puts("Not found!");
+        return;
+    }
+
+    if (id != area_owner[x][y]) { // purchase is affordable only when it's area of others
+
+        // The member should pay affordable price
+        // and current account(money) of the member should be enough to pay over
+        if (spent >= area_price[x][y] && node->value.money >= spent) {
+            approval = 1;
+            
+            node->value.money -= spent;
+            set_level(&node->value);
+
+            log = (log_t){ DOWN, spent };
+            log_insert(node->value.log, log);
+
+            if (area_owner[x][y] != -1) { // case of trade
+                rb_find(tree, area_owner[x][y], &origin);
+
+                origin->value.money += spent;
+                set_level(&origin->value);
+
+                log = (log_t){ UP, spent };
+                log_insert(origin->value.log, log);
+            }
+
+            // renew area info
+            area_price[x][y] = spent;
+            area_owner[x][y] = id;
+        }
+    }
+
+    printf("%d %d %d\n", approval, node->value.money, area_owner[x][y]);
+}
+
 log_list_t *log_create() {
     log_list_t *list = NULL;
     
@@ -429,14 +719,6 @@ int rb_restructuring(rb_tree_t *tree, rb_node_t *node) {
     return ret;
 }
 
-int rb_treaverse_node_dfs(rb_node_t *node, int depth) {
-
-}
-
-void rb_treaverse_dfs(rb_tree_t *tree) {
-
-}
-
 int rb_find(rb_tree_t *tree, int id, rb_node_t **found) {
     int depth = 0;
     *found = tree->root;
@@ -457,265 +739,4 @@ int rb_find(rb_tree_t *tree, int id, rb_node_t **found) {
     }
 
     return depth;
-}
-
-
-int execute_operation(rb_tree_t *tree, char op) {
-    
-    switch (op) {
-    case 'I' :
-        op_join_member(tree);
-        break;
-    case 'P' :
-        op_print_info(tree);
-        break;
-    case 'A' :
-        op_add_cash(tree);
-        break;
-    case 'F' :
-        op_find_top_five(tree);
-        break;
-    case 'R' :
-        op_print_log(tree);
-        break;
-    case 'B' :
-        op_buy_area(tree);
-        break;
-    case '\n':
-        break;
-    case 'Q' :
-        return 0;
-    default :
-        printf("Invalid operation %c\n", op);
-    }
-
-    return 1;
-}
-
-void op_join_member(rb_tree_t *tree) {
-    member_t new_member;
-    unsigned int ret;
-    int depth, approval;
-
-    rb_node_t *test;
-    int tdepth;
-    
-    scanf("%d %s %s %d %d",
-        &new_member.id, new_member.name, new_member.phone, &new_member.x, &new_member.y);
-//    printf("Query :: I %d %s %s %d %d\n",
-//        new_member.id, new_member.name, new_member.phone, new_member.x, new_member.y); // nurungg
-    new_member.level = 0;
-    new_member.money = 0;
-
-    ret = rb_insert(tree, new_member); 
-    
-    // test
-//    test = tree->root;
-//    tdepth = 0;
-//    while (test->value.id != new_member.id) {
-//        if (new_member.id < test->value.id) {
-//            test = test->left;
-//        } else {
-//            test = test->right;
-//        }
-//        tdepth++;
-//    }
-    // end
-
-    depth = ret & 0x7fffffff;
-
-    if ((ret & 0x80000000) == 0) {
-        approval = 0;
-    } else {
-        approval = 1;
-        
-        if (area_owner[new_member.x][new_member.y] == -1) {
-            area_owner[new_member.x][new_member.y] = new_member.id;
-        }
-    }
-
-    printf("%d %d\n", depth, approval);
-}
-
-void op_print_info(rb_tree_t *tree) {
-    int id, depth;
-    rb_node_t *node;
-    member_t member;
-    
-    scanf("%d", &id);
-    //printf("Query :: P %d\n", id); // nurungg
-
-    if ((depth = rb_find(tree, id, &node)) == -1) {
-        puts("Not found!");
-    } else {            
-        member = node->value;
-        printf("%s %s %d %d %d\n",
-            member.name, member.phone, member.level, member.money, depth);
-    }
-}
-
-void set_level(member_t *member) {
-    if (member->money < 30000) {
-        member->level = 0;
-
-    } else if (member->money < 50000) {
-        member->level = 1;
-
-    } else if (member->money < 100000) {
-        member->level = 2;
-
-    } else {
-        member->level = 3;
-    } 
-}       
-
-void op_add_cash(rb_tree_t *tree) {
-    int id, amount, depth;
-    rb_node_t *node;
-    log_t log;
-
-    scanf("%d %d", &id, &amount);
-    //printf("Query :: A %d %d\n", id, amount); // nurungg
-
-    if ((depth = rb_find(tree, id, &node)) == -1) {
-        puts("Not found!");
-
-    } else {
-        node->value.money += amount;
-        
-        set_level(&node->value);
-
-        log.updown = UP;
-        log.amount = amount;
-        log_insert(node->value.log, log);
-
-        printf("%d %d\n", depth, node->value.level);
-    }
-}
-
-void treaverse_dfs_node(rb_node_t *node, int *id, int *money) {
-    int i;
-
-    if (node == NULL) return;
-
-    treaverse_dfs_node(node->left, id, money);
-    
-    if (money[4] < node->value.money) {
-        id[4]    = node->value.id;
-        money[4] = node->value.money;
-        
-        for (int i = 4; i > 0; i--) {
-            if (money[i-1] < money[i]) {
-                int tmp_id, tmp_money;
-                tmp_id    = id[i];
-                tmp_money = money[i];
-
-                id[i]    = id[i-1];
-                money[i] = money[i-1];
-
-                id[i-1]    = tmp_id;
-                money[i-1] = tmp_money;
-
-            } else {
-                break;
-            }
-        }
-    }
-
-    treaverse_dfs_node(node->right, id, money);
-}
-
-void op_find_top_five(rb_tree_t *tree) {
-    int id[5], money[5];
-    int i;
-
-    //printf("Query :: F\n"); // nurungg
-    
-    memset(id, 0, 5 * sizeof(int));
-    memset(money, 0, 5 * sizeof(int));
-    
-    treaverse_dfs_node(tree->root, id, money);
-
-    for (i = 0; i < 5; i++) {
-        if (id[i] == 0) break;
-
-        printf("%d %d\n", id[i], money[i]);
-    }
-
-    if (i == 0) {
-        puts("Not found!");
-    }
-}
-
-void op_print_log(rb_tree_t *tree) {
-    int id, log_amount;
-    rb_node_t *node;
-    log_node_t *log;
-    int i;
-
-    scanf("%d %d", &id, &log_amount);
-    //printf("Query :: R %d %d\n", id, log_amount); // nurungg
-
-    if (rb_find(tree, id, &node) == -1) {
-        puts("Not found!");
-        return;
-    }
-
-    log = node->value.log->head;
-    for (i = 0; i < log_amount; i++) {
-        if (log == NULL) break;
-
-        printf("%d %d\n", log->value.updown, log->value.amount);
-        
-        log = log->next;
-    }
-
-    if (i == 0) {
-        puts("0");
-    }
-}
-
-void op_buy_area(rb_tree_t *tree) {
-    int id, x, y, spent;
-    rb_node_t *node, *origin;
-    int approval = 0;
-
-    log_t log_node, log_origin;
-
-    scanf("%d %d %d %d", &id, &x, &y, &spent); 
-    //printf("Query :: B %d %d %d %d\n", id, x, y, spent); // nurungg
-
-    if (rb_find(tree, id, &node) == -1) {
-        puts("Not found!");
-        return;
-    }
-
-    if (id != area_owner[x][y]) {
-        if (spent >= area_price[x][y] && node->value.money >= spent) {
-            approval = 1;
-            
-            node->value.money -= spent;
-            set_level(&node->value);
-
-            log_node.updown = DOWN;
-            log_node.amount = spent;
-            log_insert(node->value.log, log_node);
-
-            if (area_owner[x][y] != -1) { // trade
-                rb_find(tree, area_owner[x][y], &origin);
-
-                origin->value.money += spent;
-                set_level(&origin->value);
-
-                log_origin.updown = UP;
-                log_origin.amount = spent;
-                log_insert(origin->value.log, log_origin);
-            }
-
-            area_price[x][y] = spent;
-            area_owner[x][y] = id;
-        }
-    }
-
-    printf("%d %d %d\n", approval, node->value.money, area_owner[x][y]);
 }
