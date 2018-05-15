@@ -86,6 +86,9 @@ int             rb_treaverse_node_dfs(rb_node_t *node, int depth);
 void            rb_treaverse_dfs(rb_tree_t *tree);
 int             rb_find(rb_tree_t *tree, int id, rb_node_t **node);
 
+// Heap implementation
+
+
 // Execute wrapper functions
 int             execute_operation(rb_tree_t *tree, char op);
 void            op_join_member(rb_tree_t *tree);
@@ -151,6 +154,7 @@ int Setup() {
         }
         
         rb_insert(all_members, new_member);
+        
         area_owner[new_member.x][new_member.y] = new_member.id;
     }
 
@@ -178,7 +182,7 @@ int execute_operation(rb_tree_t *tree, char op) {
         op_join_member(tree);
         break;
 
-    case 'P' : // print
+    case 'P' : // info
         op_print_info(tree);
         break;
 
@@ -204,6 +208,8 @@ int execute_operation(rb_tree_t *tree, char op) {
     default :
         printf("Invalid operation %c\n", op);
     }
+
+    getc(op); // to flush '\n' character
 
     return CONTINUE;
 }
@@ -384,7 +390,7 @@ void op_print_log(rb_tree_t *tree) {
 }
 
 void op_buy_area(rb_tree_t *tree) {
-    // Buy the area for the price(or more)
+    // Buy the area at the price(or more)
 
     int id, x, y, spent;
     rb_node_t *node, *origin;
