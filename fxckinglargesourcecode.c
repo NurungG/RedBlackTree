@@ -14,6 +14,8 @@
 #define UP              1
 #define DOWN            0
 
+#define RANK_MAX        100
+
 
 /* Structures */
 
@@ -43,6 +45,7 @@ struct member_s {
     int  level;
     int  money;
     struct log_list_s *log;
+    int  is_ranked;
 };
 
 // Red-Black Node structure
@@ -82,12 +85,9 @@ unsigned int    rb_insert(rb_tree_t *tree, member_t value);
 int             rb_remedy_double_red(rb_tree_t *tree, rb_node_t *node);
 int             rb_recoloring(rb_tree_t *tree, rb_node_t *node);
 int             rb_restructuring(rb_tree_t *tree, rb_node_t *node);
-int             rb_treaverse_node_dfs(rb_node_t *node, int depth);
-void            rb_treaverse_dfs(rb_tree_t *tree);
+int             rb_traverse_node_dfs(rb_node_t *node, int depth);
+void            rb_traverse_dfs(rb_tree_t *tree);
 int             rb_find(rb_tree_t *tree, int id, rb_node_t **node);
-
-// Heap implementation
-
 
 // Execute wrapper functions
 int             execute_operation(rb_tree_t *tree, char op);
@@ -97,6 +97,8 @@ void            op_add_cash(rb_tree_t *tree);
 void            op_find_top_five(rb_tree_t *tree);
 void            op_print_log(rb_tree_t *tree);
 void            op_buy_area(rb_tree_t *tree);
+
+void            traverse_dfs_node(rb_node_t *node);
 
 // Main wrapper functions
 void            Init();
@@ -108,6 +110,9 @@ void            Execute();
 rb_tree_t      *all_members;
 int             area_price[1001][1001];
 int             area_owner[1001][1001];
+rb_node_t      *rank[RANK_MAX];
+rb_node_t      *zero_node;
+int             bound_id, bound_money;
 
 
 /* Main function */
@@ -124,9 +129,17 @@ int main() {
 /* Function implementation */
 void Init() {
     // Initiate global variables
+    int i;
 
     all_members = rb_create();
     memset(area_owner, -1, 1001 * 1001 * sizeof(int));
+
+    zero_node = rb_create_node();
+    memset(&(zero_node->value), 0, sizeof(member_t));
+    
+    for (i = 0; i < RANK_MAX; i++) {
+        rank[i] = zero_node;
+    }
 }
 
 int Setup() {
@@ -135,6 +148,7 @@ int Setup() {
     char filename[1024];
     FILE *input;
     member_t new_member;
+    int i;
 
     fputs("입력파일의 이름을 입력하세요 : ", stdout);
     fgets(filename, 1024, stdin);
@@ -154,9 +168,14 @@ int Setup() {
         }
         
         rb_insert(all_members, new_member);
-        
         area_owner[new_member.x][new_member.y] = new_member.id;
     }
+
+    traverse_dfs_node(all_members->root); // set rank array
+
+//    for (int i = 0; i < RANK_MAX; i++) {
+//        printf("%d\n", rank[i]->value.is_ranked);
+///    }
 
     fclose(input);
     return 0;
@@ -209,7 +228,7 @@ int execute_operation(rb_tree_t *tree, char op) {
         printf("Invalid operation %c\n", op);
     }
 
-    getc(op); // to flush '\n' character
+    getc(stdin); // to flush '\n' character
 
     return CONTINUE;
 }
@@ -281,12 +300,43 @@ void set_level(member_t *member) {
     } 
 }
 
+int rank_cmp(rb_node_t *a, rb_node_t *b) {
+    if (a->value.money > b->value.money) {
+        return 1;
+    } else if (a->value.money == b->value.money) {
+        if (a->value.id < b->value.id) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void reset_bound() {
+    rb_node_t *node = rb_create_node();
+    node->value.money = bound_money;
+    node->value.id = bound_id;
+
+    if (rank_cmp(rank[RANK_MAX-1], node)) { // increase bound
+        bound_money = rank[RANK_MAX-1]->value.money;
+        bound_id = rank[RANK_MAX-1]->value.id;
+    } else if (rank_cmp(node, rank[4])) { // renew rank array
+        memset(rank, 0, sizeof(int) * RANK_MAX);
+        traverse_dfs_node(all_members->root);
+
+        bound_money = rank[RANK_MAX-1]->value.money;
+        bound_id = rank[RANK_MAX-1]->value.id;
+    }
+    
+    free(node);
+}
+
 void op_add_cash(rb_tree_t *tree) {
     // Add cash to the account
 
     int id, amount, depth;
     rb_node_t *node;
     log_t log;
+    int i;
 
     scanf("%d %d", &id, &amount);
 
@@ -294,65 +344,82 @@ void op_add_cash(rb_tree_t *tree) {
         puts("Not found!");
 
     } else {
-        node->value.money += amount;        
+        node->value.money += amount;
         set_level(&node->value);
 
         log = (log_t){ UP, amount };
         log_insert(node->value.log, log);
 
         printf("%d %d\n", depth, node->value.level);
+
+        // renew rank
+        if (node->value.is_ranked == 1) {
+            for(i = 0; i < RANK_MAX; i++) {
+                if (rank[i] == node) break;
+            }
+            for (; i > 0; i--) {
+                if (rank_cmp(node, rank[i-1])) {
+                    rank[i] = rank[i-1];
+                } else {
+                    break;
+                }
+            }
+            rank[i] = node;
+
+        } else {
+            if (rank_cmp(node, rank[RANK_MAX-1])) {
+                rank[RANK_MAX-1]->value.is_ranked = 0;
+                node->value.is_ranked = 1;
+                //rank[RANK_MAX-1] = node;
+
+                for (i = RANK_MAX-1; i > 0; i--) {
+                    if (rank_cmp(node, rank[i-1])) {
+                        rank[i] = rank[i-1];
+                    } else {
+                        break;
+                    }
+                }
+                rank[i] = node;
+                reset_bound();
+            }
+        }
     }
 }
 
 
 // TODO
-void treaverse_dfs_node(rb_node_t *node, int *id, int *money) {
+void traverse_dfs_node(rb_node_t *node) {
     int i;
 
     if (node == NULL) return;
 
-    treaverse_dfs_node(node->left, id, money);
-    
-    if (money[4] < node->value.money) {
-        id[4]    = node->value.id;
-        money[4] = node->value.money;
-        
-        for (int i = 4; i > 0; i--) {
-            if (money[i-1] < money[i]) {
-                int tmp_id, tmp_money;
-                tmp_id    = id[i];
-                tmp_money = money[i];
+    traverse_dfs_node(node->left);
 
-                id[i]    = id[i-1];
-                money[i] = money[i-1];
-
-                id[i-1]    = tmp_id;
-                money[i-1] = tmp_money;
-
+    if (node->value.money > rank[RANK_MAX-1]->value.money) {
+        rank[RANK_MAX-1]->value.is_ranked = 0;
+        for (i = RANK_MAX-1; i > 0; i--) {
+            if (rank[i-1]->value.money < node->value.money) {
+                rank[i] = rank[i-1];
             } else {
                 break;
             }
         }
+        rank[i] = node;
+        node->value.is_ranked = 1;
     }
 
-    treaverse_dfs_node(node->right, id, money);
+    traverse_dfs_node(node->right);
 }
 
 // TODO : improve time complexity from O(n) -> O(log n) or O(1)
 // its a bottleneck
 void op_find_top_five(rb_tree_t *tree) {
-    int id[5], money[5];
     int i;
 
-    memset(id, 0, 5 * sizeof(int));
-    memset(money, 0, 5 * sizeof(int));
-    
-    treaverse_dfs_node(tree->root, id, money);
-
     for (i = 0; i < 5; i++) {
-        if (id[i] == 0) break;
+        if (rank[i] == zero_node) break;
 
-        printf("%d %d\n", id[i], money[i]);
+        printf("%d %d\n", rank[i]->value.id, rank[i]->value.money);
     }
 
     if (i == 0) {
@@ -396,6 +463,7 @@ void op_buy_area(rb_tree_t *tree) {
     rb_node_t *node, *origin;
     int approval = 0;
     log_t log;
+    int i;
 
     scanf("%d %d %d %d", &id, &x, &y, &spent); 
 
@@ -411,12 +479,6 @@ void op_buy_area(rb_tree_t *tree) {
         if (spent >= area_price[x][y] && node->value.money >= spent) {
             approval = 1;
             
-            node->value.money -= spent;
-            set_level(&node->value);
-
-            log = (log_t){ DOWN, spent };
-            log_insert(node->value.log, log);
-
             if (area_owner[x][y] != -1) { // case of trade
                 rb_find(tree, area_owner[x][y], &origin);
 
@@ -425,11 +487,66 @@ void op_buy_area(rb_tree_t *tree) {
 
                 log = (log_t){ UP, spent };
                 log_insert(origin->value.log, log);
+
+                if (origin->value.is_ranked == 1) {
+                    for (i = 0; i < RANK_MAX; i++) {
+                        if (rank[i] == origin) break;
+                    }
+                    for (; i > 0; i--) {
+                        if (rank_cmp(origin, rank[i-1])) {
+                            rank[i] = rank[i-1];
+                        } else {
+                            break;
+                        }
+                    }
+                    rank[i] = origin;
+
+                } else {
+                    if (rank_cmp(origin, rank[RANK_MAX-1])) {
+                        rank[RANK_MAX-1]->value.is_ranked = 0;
+                        origin->value.is_ranked = 1;
+                        //rank[RANK_MAX-1] = origin;
+
+                        for (i = RANK_MAX-1; i > 0; i--) {
+                            if (rank_cmp(origin, rank[i-1])) {
+                                rank[i] = rank[i-1];
+                            } else {
+                                break;
+                            }
+                        }
+                        rank[i] = origin;
+                        reset_bound();
+                    }
+                }
             }
+
+            node->value.money -= spent;
+            set_level(&node->value);
+
+            log = (log_t){ DOWN, spent };
+            log_insert(node->value.log, log);
+
 
             // renew area info
             area_price[x][y] = spent;
             area_owner[x][y] = id;
+
+            if (node->value.is_ranked == 1) {
+                for (i = 0; i < RANK_MAX; i++) {
+                    if (rank[i] == node) break;
+                }
+
+                for (; i < RANK_MAX-1; i++) {
+                    if (rank_cmp(rank[i+1], node)) {
+                        rank[i] = rank[i+1];
+                    } else {
+                        break;
+                    }
+                }
+                rank[i] = node;
+
+                reset_bound();
+            }
         }
     }
 
@@ -527,6 +644,7 @@ unsigned int rb_insert(rb_tree_t *tree, member_t value) {
         root = rb_create_node();
         root->value = value;
         root->value.log = log_create();
+        root->value.is_ranked = 0;
         root->color = BLACK;
         
         tree->root = root;
@@ -560,6 +678,7 @@ unsigned int rb_insert(rb_tree_t *tree, member_t value) {
         vacant->parent = parent;
         vacant->value  = value;
         vacant->value.log = log_create();
+        vacant->value.is_ranked = 0;
 
         if (vacant->value.id < parent->value.id) {
             parent->left = vacant;
