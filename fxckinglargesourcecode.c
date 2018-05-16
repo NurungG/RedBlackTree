@@ -1,4 +1,4 @@
-/* Includes */
+/* includes */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,15 +19,10 @@
 
 /* Structures */
 
-// Information of each account log
-struct log_s {
+// Log node structure (including information about each log of account)
+struct log_node_s {
     int updown;
     int amount;
-};
-
-// Log node structure
-struct log_node_s {
-    struct log_s value;
     struct log_node_s *next;
 };
 
@@ -54,7 +49,7 @@ struct rb_node_s {
     struct rb_node_s *left;
     struct rb_node_s *right;
     struct member_s  value;
-    int color;
+    int color;                // 0(RED) or 1(BLACK)
 };
 
 // Red-Black Tree structure
@@ -62,7 +57,6 @@ struct rb_tree_s {
     struct rb_node_s *root;
 };
 
-typedef struct log_s log_t;
 typedef struct log_node_s log_node_t;
 typedef struct log_list_s log_list_t;
 
@@ -71,39 +65,38 @@ typedef struct rb_node_s rb_node_t;
 typedef struct rb_tree_s rb_tree_t;
 
 
-/* Declare functions */
+/* Declare function prototype */
 
 // Log(list) implementation
-log_list_t     *log_create();
-log_node_t     *log_create_node();
-void            log_insert(log_list_t *list, log_t value);
+log_list_t *log_create();
+log_node_t *log_create_node();
+void        log_insert(log_list_t *list, int ud, int amt);
 
 // Red-Black Tree implementation
-rb_tree_t      *rb_create();
-rb_node_t      *rb_create_node();
-unsigned int    rb_insert(rb_tree_t *tree, member_t value);
-int             rb_remedy_double_red(rb_tree_t *tree, rb_node_t *node);
-int             rb_recoloring(rb_tree_t *tree, rb_node_t *node);
-int             rb_restructuring(rb_tree_t *tree, rb_node_t *node);
-int             rb_traverse_node_dfs(rb_node_t *node, int depth);
-void            rb_traverse_dfs(rb_tree_t *tree);
-int             rb_find(rb_tree_t *tree, int id, rb_node_t **node);
-
-// Execute wrapper functions
-int             execute_operation(rb_tree_t *tree, char op);
-void            op_join_member(rb_tree_t *tree);
-void            op_print_info(rb_tree_t *tree);
-void            op_add_cash(rb_tree_t *tree);
-void            op_find_top_five(rb_tree_t *tree);
-void            op_print_log(rb_tree_t *tree);
-void            op_buy_area(rb_tree_t *tree);
-
-void            traverse_dfs_node(rb_node_t *node);
+rb_tree_t  *rb_create();
+rb_node_t  *rb_create_node();
+int         rb_insert(rb_tree_t *tree, member_t value);
+int         rb_recoloring(rb_tree_t *tree, rb_node_t *node);
+int         rb_restructuring(rb_tree_t *tree, rb_node_t *node);
+void        rb_traverse_dfs(rb_tree_t *tree);
+int         rb_traverse_node_dfs(rb_node_t *node, int depth);
+int         rb_find(rb_tree_t *tree, int id, rb_node_t **node);
 
 // Main wrapper functions
-void            Init();
-int             Setup();
-void            Execute();
+void        Init();
+int         Setup();
+void        Execute();
+
+// Execute wrapper functions
+int         execute_operation(rb_tree_t *tree, char op);
+void        op_join_member(rb_tree_t *tree);
+void        op_print_info(rb_tree_t *tree);
+void        op_add_cash(rb_tree_t *tree);
+void        op_find_top_five(rb_tree_t *tree);
+void        op_print_log(rb_tree_t *tree);
+void        op_buy_area(rb_tree_t *tree);
+
+void        traverse_dfs_node(rb_node_t *node);
 
 
 /* Global variables */
@@ -849,7 +842,7 @@ int rb_find(rb_tree_t *tree, int id, rb_node_t **found) {
     *found = tree->root;
     
     while (*found != NULL) {
-        if (id == (*found)->value.id) { // get
+        if (id == (*found)->value.id) { // find!
             break;
         } else if (id < (*found)->value.id) { // go left
             *found = (*found)->left;
