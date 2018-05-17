@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
-#include "rbt.h"
+#include "../rbt.h"
 
 
 /* Defines */
@@ -82,12 +83,33 @@ rb_node_t      *rank[RANK_MAX];
 rb_node_t      *zero_node;
 int             bound_id, bound_money;
 
+int a, b, c, d, e, f, g;
+
 
 /* Main function */
 int main() {
+    time_t stime = 0, etime = 0;
+    float gap;
+
+    stime = clock();
+
     Init();
     Setup();
     Execute();
+
+    printf("traverse calls                   :: %d\n", a);
+    printf("reset_bound calls                :: %d\n", b);
+    printf("ranked member buy                :: %d\n", c);
+    printf("ranked member add cash           :: %d\n", d);
+    printf("ranked member sell               :: %d\n", e);
+    printf("new member ranked by sell        :: %d\n", f);
+    printf("new member ranked in by add cash :: %d\n", g);
+
+    etime = clock();
+
+    gap = (float)(etime-stime)/(CLOCKS_PER_SEC);
+    
+    printf("execution time : %f sec\n", gap);
     return 0;
 }
 
@@ -102,10 +124,6 @@ void Init() {
 
     zero_node = rb_create_node();
     zero_node->value = (void*)member_create();
-    
-    for (i = 0; i < RANK_MAX; i++) {
-        rank[i] = zero_node;
-    }
 }
 
 int Setup() {
@@ -287,7 +305,6 @@ void reset_bound() {
         bound_money = ((member_t*)rank[RANK_MAX-1]->value)->money;
         bound_id    = rank[RANK_MAX-1]->key;
     } else if (rank_cmp(node, rank[4])) { // renew rank array
-        memset(rank, 0, sizeof(int) * RANK_MAX);
         traverse_dfs(all_members);
 
         bound_money = ((member_t*)rank[RANK_MAX-1]->value)->money;
@@ -296,6 +313,8 @@ void reset_bound() {
     
     free((member_t*)node->value);
     free(node);
+
+    b++;
 }
 
 void op_add_cash() {
@@ -335,6 +354,8 @@ void op_add_cash() {
             }
             rank[i] = node;
 
+            d++;
+
         } else {
             if (rank_cmp(node, rank[RANK_MAX-1])) {
                 ((member_t*)rank[RANK_MAX-1]->value)->is_ranked = 0;
@@ -349,6 +370,8 @@ void op_add_cash() {
                 }
                 rank[i] = node;
                 reset_bound();
+
+                g++;
             }
         }
     }
@@ -356,7 +379,13 @@ void op_add_cash() {
 
 
 void traverse_dfs(rb_tree_t *tree) {
+    for (int i = 0; i < RANK_MAX; i++) {
+        rank[i] = zero_node;
+    }
     traverse_dfs_node(tree->root);
+    bound_id = rank[RANK_MAX-1]->key;
+    bound_money = ((member_t*)rank[RANK_MAX-1]->value)->money;
+    a++;
 }
 
 void traverse_dfs_node(rb_node_t *node) {
@@ -476,6 +505,7 @@ void op_buy_area() {
                         }
                     }
                     rank[i] = origin;
+                    e++;
 
                 } else {
                     if (rank_cmp(origin, rank[RANK_MAX-1])) {
@@ -491,6 +521,8 @@ void op_buy_area() {
                         }
                         rank[i] = origin;
                         reset_bound();
+
+                        f++;
                     }
                 }
             }
@@ -516,6 +548,8 @@ void op_buy_area() {
                 rank[i] = node;
 
                 reset_bound();
+
+                c++;
             }
 
             // renew area info
