@@ -4,6 +4,10 @@
 
 #include "rbt.h"
 
+#define RED     0
+#define BLACK   1
+
+/* Create Red-Black Tree */
 rb_tree_t *rb_create() {
     rb_tree_t *tree = NULL;
     
@@ -16,6 +20,7 @@ rb_tree_t *rb_create() {
     return tree;
 }
 
+/* Create Red-Black Node */
 rb_node_t *rb_create_node() {
     rb_node_t *node = NULL;
 
@@ -23,17 +28,20 @@ rb_node_t *rb_create_node() {
         return NULL;
     }
 
-    node->parent = NULL;
+    memset(node, 0, sizeof(rb_node_t));
+
+/*  node->parent = NULL;
     node->left   = NULL;
     node->right  = NULL;
 
     node->key    = 0;
     node->value  = NULL;
-    node->color  = RED;  // default color is RED
+    node->color  = RED;  // default color is RED    */
 
     return node;
 }
 
+/* Insert {key, value} pair to tree */
 int rb_insert(rb_tree_t *tree, rb_key_t ikey, void *value) {
     rb_node_t *root;
     rb_node_t *vacant;
@@ -43,9 +51,10 @@ int rb_insert(rb_tree_t *tree, rb_key_t ikey, void *value) {
     if (tree->root == NULL) {
         // Case of empty
         root = rb_create_node();
-        root->color = BLACK;
+
         root->key   = ikey;
         root->value = value;
+        root->color = BLACK;
 
         tree->root = root;
         
@@ -73,6 +82,7 @@ int rb_insert(rb_tree_t *tree, rb_key_t ikey, void *value) {
 
         // Create node on the vacant
         vacant = rb_create_node();
+
         vacant->parent = parent;
         vacant->key    = ikey;
         vacant->value  = value;
@@ -96,6 +106,7 @@ int rb_insert(rb_tree_t *tree, rb_key_t ikey, void *value) {
     return 0;
 }
 
+/* Get sibling of the node */
 static rb_node_t *get_sibling(rb_node_t *node) {
     rb_node_t *sibling;
 
@@ -112,6 +123,7 @@ static rb_node_t *get_sibling(rb_node_t *node) {
     return sibling;
 }
 
+/* Recolor two RED nodes to BLACK, and a parent of them to RED */
 static void recoloring(rb_tree_t *tree, rb_node_t *node) {
     rb_node_t *parent;
     rb_node_t *sibling;
@@ -136,26 +148,25 @@ static void recoloring(rb_tree_t *tree, rb_node_t *node) {
     // And root vertex still remain as BLACK node
 }
 
+/* Setup pointer information before restructuring */
 static void restructuring_setup(
     rb_node_t *node, rb_node_t **p, rb_node_t **l, rb_node_t **r,
     rb_node_t **lrc, rb_node_t **rlc) {
-    // Setup pointer information before restructuring
 
-    rb_node_t *parent;
-    rb_node_t *grand;
+    rb_node_t *parent = node->parent;
+    rb_node_t *grand  = parent->parent;
 
-    parent = node->parent;
-    grand  = parent->parent;
-    
     if (grand->left == parent) {
-        if (parent->left == node) { // left-left
+        if (parent->left == node) {
+            // left-left
             *l = node;               /*     BLACK */
             *r = grand;              /*     /     */
             *p = parent;             /*   RED     */
             *lrc = node->right;      /*   /       */
             *rlc = parent->right;    /* RED       */
 
-        } else { // left-right
+        } else {
+            // left-right
             *l = parent;             /*   BLACK   */
             *r = grand;              /*   /       */
             *p = node;               /* RED       */
@@ -164,14 +175,16 @@ static void restructuring_setup(
         }
 
     } else {
-        if (parent->left == node) { // right-left
+        if (parent->left == node) {
+            // right-left
             *l = grand;              /*  BLACK    */
             *r = parent;             /*      \    */
             *p = node;               /*      RED  */
             *lrc = node->left;       /*      /    */
             *rlc = node->right;      /*     RED   */
             
-        } else { // right-right
+        } else {
+            // right-right
             *l = grand;              /* BLACK     */
             *r = node;               /*     \     */
             *p = parent;             /*     RED   */
@@ -181,6 +194,7 @@ static void restructuring_setup(
     }
 }
 
+/* Restructure the sub-tree of tree */
 static void restructuring(rb_tree_t *tree, rb_node_t *node) {
     rb_node_t *parent;
     rb_node_t *left;
@@ -232,15 +246,13 @@ static void restructuring(rb_tree_t *tree, rb_node_t *node) {
     // On restructuring, it doesn't propagate to upper layer
 }
 
+/* Remedy the double red situation by appropriate solution */
 void rb_remedy_double_red(rb_tree_t *tree, rb_node_t *node) {
-    rb_node_t *parent;
-    rb_node_t *uncle;
+    rb_node_t *parent = node->parent;
+    rb_node_t *uncle  = get_sibling(parent);
 
     // Double red situation guarantees the node has at least height of 3
     // So there is no need to doubt that the grand parent is NULL
-
-    parent = node->parent;
-    uncle  = get_sibling(parent);
 
     if (uncle != NULL && uncle->color == RED) { // recoloring
         recoloring(tree, parent);
@@ -249,13 +261,12 @@ void rb_remedy_double_red(rb_tree_t *tree, rb_node_t *node) {
     }
 }
 
+/* Find the node */
 int rb_find(rb_tree_t *tree, rb_key_t skey, rb_node_t **found) {
-    int depth;
-    rb_node_t *node;
+    int depth = 0;
+    rb_node_t *node = tree->root;
 
-    depth = 0;
-    node  = tree->root;
-
+    // Search
     while (node != NULL) {
         if (skey== node->key) { // find!
             break;
@@ -267,10 +278,12 @@ int rb_find(rb_tree_t *tree, rb_key_t skey, rb_node_t **found) {
         ++depth;
     }
 
+    // Fail to find
     if (node == NULL) {
         depth = -1;
     }
 
+    // Save the node pointer
     if (found != NULL) {
         *found = node;
     }

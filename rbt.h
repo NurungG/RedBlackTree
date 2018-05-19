@@ -1,9 +1,6 @@
 #ifndef __RBT_H__
 #define __RBT_H__
 
-#define RED     0
-#define BLACK   1
-
 typedef unsigned int rb_key_t;
 
 // Red-Black Node structure
@@ -13,8 +10,8 @@ struct rb_node_s {
     struct rb_node_s *right;
 
     rb_key_t key;
-    void *value;
-    int   color; // 0(RED) or 1(BLACK)
+    void    *value;
+    int      color; // 0(RED) or 1(BLACK)
 };
 
 // Red-Black Tree structure
