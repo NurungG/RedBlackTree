@@ -2,22 +2,43 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 
 /* Defines */
-#define EXIT_STATUS     0
-#define CONTINUE        1
 
 #define RED             0
 #define BLACK           1
 
+#define EXIT_STATUS     0
+#define CONTINUE        1
+
 #define UP              1
 #define DOWN            0
 
-#define RANK_MAX        100
+#define RANK_MAX        10
+
+typedef unsigned int rb_key_t;
 
 
 /* Structures */
+
+// Red-Black Node structure
+struct rb_node_s {
+    struct rb_node_s *parent;
+    struct rb_node_s *left;
+    struct rb_node_s *right;
+
+    rb_key_t key;
+    void    *value;
+    int      color; // 0(RED) or 1(BLACK)
+};
+
+// Red-Black Tree structure
+struct rb_tree_s {
+    struct rb_node_s *root;
+};
+
 
 // Log node structure (including information about each log of account)
 struct log_node_s {
@@ -33,7 +54,6 @@ struct log_list_s {
 
 // Information of each member
 struct member_s {
-    int  id;
     char name[21];
     char phone[12];
     int  x, y;
@@ -43,44 +63,32 @@ struct member_s {
     int  is_ranked;
 };
 
-// Red-Black Node structure
-struct rb_node_s {
-    struct rb_node_s *parent;
-    struct rb_node_s *left;
-    struct rb_node_s *right;
-    struct member_s  value;
-    int color;                // 0(RED) or 1(BLACK)
-};
-
-// Red-Black Tree structure
-struct rb_tree_s {
-    struct rb_node_s *root;
-};
+typedef struct rb_node_s rb_node_t;
+typedef struct rb_tree_s rb_tree_t;
 
 typedef struct log_node_s log_node_t;
 typedef struct log_list_s log_list_t;
-
 typedef struct member_s member_t;
-typedef struct rb_node_s rb_node_t;
-typedef struct rb_tree_s rb_tree_t;
 
 
 /* Declare function prototype */
 
-// Log(list) implementation
-log_list_t *log_create();
-log_node_t *log_create_node();
-void        log_insert(log_list_t *list, int ud, int amt);
-
 // Red-Black Tree implementation
 rb_tree_t  *rb_create();
 rb_node_t  *rb_create_node();
-int         rb_insert(rb_tree_t *tree, member_t value);
-int         rb_recoloring(rb_tree_t *tree, rb_node_t *node);
-int         rb_restructuring(rb_tree_t *tree, rb_node_t *node);
-void        rb_traverse_dfs(rb_tree_t *tree);
-int         rb_traverse_node_dfs(rb_node_t *node, int depth);
-int         rb_find(rb_tree_t *tree, int id, rb_node_t **node);
+int         rb_insert(rb_tree_t *tree, rb_key_t ikey, void *value);
+void        rb_remedy_double_red(rb_tree_t *tree, rb_node_t *node);
+int         rb_find(rb_tree_t *tree, rb_key_t skey, rb_node_t **node);
+
+// Log(list) implementation
+log_list_t *log_create();
+log_node_t *log_create_node();
+void        log_delete();
+void        log_insert(log_list_t *list, int ud, int amt);
+
+// Member creation
+member_t   *create_member();
+void        delete_member();
 
 // Main wrapper functions
 void        Init();
@@ -88,14 +96,16 @@ int         Setup();
 void        Execute();
 
 // Execute wrapper functions
-int         execute_operation(rb_tree_t *tree, char op);
-void        op_join_member(rb_tree_t *tree);
-void        op_print_info(rb_tree_t *tree);
-void        op_add_cash(rb_tree_t *tree);
-void        op_find_top_five(rb_tree_t *tree);
-void        op_print_log(rb_tree_t *tree);
-void        op_buy_area(rb_tree_t *tree);
+int         execute_operation(char op);
+void        op_join_member();
+void        op_print_info();
+void        op_add_cash();
+void        op_find_top_five();
+void        op_print_log();
+void        op_buy_area();
 
+// Rank setup by depth first search traversal
+void        traverse_dfs(rb_tree_t *tree);
 void        traverse_dfs_node(rb_node_t *node);
 
 
@@ -103,47 +113,62 @@ void        traverse_dfs_node(rb_node_t *node);
 rb_tree_t      *all_members;
 int             area_price[1001][1001];
 int             area_owner[1001][1001];
+
 rb_node_t      *rank[RANK_MAX];
 rb_node_t      *zero_node;
 int             bound_id, bound_money;
 
+int a, b, c, d, e, f, g;
+
 
 /* Main function */
 int main() {
-    Init();
-    
-    Setup();
+    time_t stime = 0, etime = 0;
+    float gap;
 
+    stime = clock();
+
+    Init();
+    Setup();
     Execute();
+
+    printf("traverse calls                   :: %d\n", a);
+    printf("reset_bound calls                :: %d\n", b);
+    printf("ranked member buy                :: %d\n", c);
+    printf("ranked member add cash           :: %d\n", d);
+    printf("ranked member sell               :: %d\n", e);
+    printf("new member ranked by sell        :: %d\n", f);
+    printf("new member ranked in by add cash :: %d\n", g);
+
+    etime = clock();
+
+    gap = (float)(etime-stime)/(CLOCKS_PER_SEC);
+    
+    printf("execution time : %f sec\n", gap);
     return 0;
 }
 
 
 /* Function implementation */
-void Init() {
-    // Initiate global variables
-    int i;
 
+/* Initiate global variables */
+void Init() {
     all_members = rb_create();
     memset(area_owner, -1, 1001 * 1001 * sizeof(int));
 
     zero_node = rb_create_node();
-    memset(&(zero_node->value), 0, sizeof(member_t));
-    
-    for (i = 0; i < RANK_MAX; i++) {
-        rank[i] = zero_node;
-    }
+    zero_node->value = (void*)create_member();
 }
 
+/* Setup existing members from member-list file */
 int Setup() {
-    // Setup existing members from member-list file
-
     char filename[1024];
     FILE *input;
-    member_t new_member;
-    int i;
 
-    fputs("입력파일의 이름을 입력하세요 : ", stdout);
+    member_t *member;
+    rb_key_t id;
+
+    fputs("Input filename : ", stdout);
     fgets(filename, 1024, stdin);
 
     filename[strlen(filename)-1] = 0;
@@ -153,70 +178,63 @@ int Setup() {
         exit(1);
     }
 
+    //
     while (1) {
-        if ( fscanf(input, "%d %s %s %d %d %d %d",
-                &new_member.id, new_member.name, new_member.phone,
-                &new_member.x, &new_member.y, &new_member.level, &new_member.money) < 0 ) {
+        // 
+        member = create_member();
+        if ( fscanf(input, "%u %s %s %d %d %d %d",
+                &id, member->name, member->phone,
+                &member->x, &member->y, &member->level, &member->money) < 0 ) {
             break;
         }
         
-        rb_insert(all_members, new_member);
-        area_owner[new_member.x][new_member.y] = new_member.id;
+        rb_insert(all_members, id, (void*)member);
+        area_owner[member->x][member->y] = id;
     }
-
-    traverse_dfs_node(all_members->root); // set rank array
-
-//    for (int i = 0; i < RANK_MAX; i++) {
-//        printf("%d\n", rank[i]->value.is_ranked);
-///    }
-
+    
+    delete_member(member);
     fclose(input);
+
+    traverse_dfs(all_members); // set rank array
+
     return 0;
 }
 
+/* Execute queries */
 void Execute() {
-    // Execute queries
-
     char op;
     while (1) {
         scanf("%c", &op);
-        if (execute_operation(all_members, op) == EXIT_STATUS) {
+        if (execute_operation(op) == EXIT_STATUS) {
             break;
         }
     }
 }
 
-int execute_operation(rb_tree_t *tree, char op) {
-    // Execute an operation (by translating a query)
-    
+/* Execute an operation (by translating a query) */
+int execute_operation(char op) {    
     switch (op) {
+
     case 'I' : // join
-        op_join_member(tree);
+        op_join_member();
         break;
-
     case 'P' : // info
-        op_print_info(tree);
+        op_print_info();
         break;
-
     case 'A' : // add
-        op_add_cash(tree);
+        op_add_cash();
         break;
-
     case 'F' : // rank
-        op_find_top_five(tree);
+        op_find_top_five();
         break;
-
     case 'R' : // log
-        op_print_log(tree);
+        op_print_log();
         break;
-
     case 'B' : // buy
-        op_buy_area(tree);
+        op_buy_area();
         break;
-
     case 'Q' : // exit
         return EXIT_STATUS;
-
     default :
         printf("Invalid operation %c\n", op);
     }
@@ -226,58 +244,54 @@ int execute_operation(rb_tree_t *tree, char op) {
     return CONTINUE;
 }
 
-void op_join_member(rb_tree_t *tree) {
-    // Join to this program
+/* Join to this game */
+void op_join_member() {
 
-    member_t new_member;
-    unsigned int ret;
-    int depth, approval;
+    rb_key_t id;
+    member_t *member;
+    int approval, depth;
+
+    member = create_member();
     
-    scanf("%d %s %s %d %d",
-        &new_member.id, new_member.name, new_member.phone, &new_member.x, &new_member.y);
+    scanf("%u %s %s %d %d",
+        &id, member->name, member->phone, &member->x, &member->y);
 
-    new_member.level = 0;
-    new_member.money = 0;
-
-    ret = rb_insert(tree, new_member); // return value includes both depth and approval
-    
-    depth = ret & 0x7fffffff; // Least bits are depth
-
-    if ((ret & 0x80000000) == 0) { // Most bit is approval
-        approval = 0;
-    } else {
-        approval = 1;
-
+    if ((approval = rb_insert(all_members, id, (void*)member)) == 0) {
         // If there is no owner in starting area, it becomes belonging of him(or her)
-        if (area_owner[new_member.x][new_member.y] == -1) {
-            area_owner[new_member.x][new_member.y] = new_member.id;
+        if (area_owner[member->x][member->y] == -1) {
+            area_owner[member->x][member->y] = id;
         }
+    } else {
+        delete_member(member);
     }
+    
+    depth = rb_find(all_members, id, NULL);
 
-    printf("%d %d\n", depth, approval);
+    printf("%d %d\n", depth, approval+1);
 }
 
-void op_print_info(rb_tree_t *tree) {
-    // Print information of the member
-
-    int id, depth;
-    rb_node_t *node;
-    member_t member;
+/* Print information of the member */
+void op_print_info() {
     
-    scanf("%d", &id);
+    rb_key_t    id;
+    int         depth;
+    rb_node_t  *node;
+    member_t   *info;
 
-    if ((depth = rb_find(tree, id, &node)) == -1) {
+    scanf("%u", &id);
+
+    if ((depth = rb_find(all_members, id, &node)) == -1) {
         puts("Not found!");
 
     } else {            
-        member = node->value;
-        printf("%s %s %d %d %d\n",
-            member.name, member.phone, member.level, member.money, depth);
+        info = (member_t*)node->value;
+        printf("%s %s %d %d %u\n",
+            info->name, info->phone, info->level, info->money, depth);
     }
 }
 
+/* Set the level depending on current money */
 void set_level(member_t *member) {
-    // Set the level depending on current money
 
     if (member->money < 30000) {
         member->level = 0;
@@ -293,60 +307,90 @@ void set_level(member_t *member) {
     } 
 }
 
+/* Do comparison node a with node b (compare money mainly, and then id) */
 int rank_cmp(rb_node_t *a, rb_node_t *b) {
-    if (a->value.money > b->value.money) {
+    int money_a, money_b;
+
+    money_a = ((member_t*)a->value)->money;
+    money_b = ((member_t*)b->value)->money;
+
+    // If a has money more than b, simply return 1
+    if (money_a > money_b) {
         return 1;
-    } else if (a->value.money == b->value.money) {
-        if (a->value.id < b->value.id) {
+
+    // Else, check the id
+    } else if (money_a == money_b) {
+
+        // If id of a is smaller than of b, return 1
+        if (a->key < b->key) {
             return 1;
         }
     }
+
+    // 0 means that node b is preceding in order
     return 0;
 }
 
+/* If account of ranked member is changed, reset the boundary of money and id */
 void reset_bound() {
     rb_node_t *node = rb_create_node();
-    node->value.money = bound_money;
-    node->value.id = bound_id;
+    node->value = (void*)create_member();
 
-    if (rank_cmp(rank[RANK_MAX-1], node)) { // increase bound
-        bound_money = rank[RANK_MAX-1]->value.money;
-        bound_id = rank[RANK_MAX-1]->value.id;
-    } else if (rank_cmp(node, rank[4])) { // renew rank array
-        memset(rank, 0, sizeof(int) * RANK_MAX);
-        traverse_dfs_node(all_members->root);
+    ((member_t*)node->value)->money = bound_money;
+    node->key                       = bound_id;
 
-        bound_money = rank[RANK_MAX-1]->value.money;
-        bound_id = rank[RANK_MAX-1]->value.id;
+    // If boundary should be increased
+    if (rank_cmp(rank[RANK_MAX-1], node)) {
+        bound_money = ((member_t*)rank[RANK_MAX-1]->value)->money;
+        bound_id    = rank[RANK_MAX-1]->key;
+
+    // Else if top 5 ranked member has been under the boundary
+    } else if (rank_cmp(node, rank[4])) {
+        // Renew the rank array -> O(n) time
+        traverse_dfs(all_members);
+
+        bound_money = ((member_t*)rank[RANK_MAX-1]->value)->money;
+        bound_id    = rank[RANK_MAX-1]->key;
     }
     
+    delete_member((member_t*)node->value);
     free(node);
+
+    b++;
 }
 
-void op_add_cash(rb_tree_t *tree) {
-    // Add cash to the account
+/* Add cash to the account */
+void op_add_cash() {
+    rb_key_t    id;
+    int         amount, depth;
+    rb_node_t  *node;
+    member_t   *info;
 
-    int id, amount, depth;
-    rb_node_t *node;
-    log_t log;
     int i;
 
-    scanf("%d %d", &id, &amount);
+    scanf("%u %d", &id, &amount);
 
-    if ((depth = rb_find(tree, id, &node)) == -1) {
+    // If there is no node corresponding to given id
+    if ((depth = rb_find(all_members, id, &node)) == -1) {
         puts("Not found!");
 
+    // Else, add cash
     } else {
-        node->value.money += amount;
-        set_level(&node->value);
+        info = (member_t*)node->value;
 
-        log = (log_t){ UP, amount };
-        log_insert(node->value.log, log);
+        // Add cash
+        info->money += amount;
 
-        printf("%d %d\n", depth, node->value.level);
+        // Reset level of the member
+        set_level(info);
 
-        // renew rank
-        if (node->value.is_ranked == 1) {
+        // Append log
+        log_insert(info->log, UP, amount);
+
+        printf("%d %d\n", depth, info->level);
+
+        // Renew rank
+        if (info->is_ranked == 1) {
             for(i = 0; i < RANK_MAX; i++) {
                 if (rank[i] == node) break;
             }
@@ -359,11 +403,12 @@ void op_add_cash(rb_tree_t *tree) {
             }
             rank[i] = node;
 
+            d++;
+
         } else {
             if (rank_cmp(node, rank[RANK_MAX-1])) {
-                rank[RANK_MAX-1]->value.is_ranked = 0;
-                node->value.is_ranked = 1;
-                //rank[RANK_MAX-1] = node;
+                ((member_t*)rank[RANK_MAX-1]->value)->is_ranked = 0;
+                info->is_ranked = 1;
 
                 for (i = RANK_MAX-1; i > 0; i--) {
                     if (rank_cmp(node, rank[i-1])) {
@@ -374,45 +419,74 @@ void op_add_cash(rb_tree_t *tree) {
                 }
                 rank[i] = node;
                 reset_bound();
+
+                g++;
             }
         }
     }
 }
 
+/* Find ranked members by depth first traversal */
+void traverse_dfs(rb_tree_t *tree) {
+    // Flush the rank array
+    for (int i = 0; i < RANK_MAX; i++) {
+        rank[i] = zero_node;
+    }
 
-// TODO
+    // Do traversal
+    traverse_dfs_node(tree->root);
+
+    // Set boundary
+    bound_id = rank[RANK_MAX-1]->key;
+    bound_money = ((member_t*)rank[RANK_MAX-1]->value)->money;
+    
+    a++;
+}
+
+/* Do a depth first traversal of node, maintaining rank array */
 void traverse_dfs_node(rb_node_t *node) {
+    member_t *info;
     int i;
 
     if (node == NULL) return;
 
+    // Do the left node first (smallest id gets in first)
     traverse_dfs_node(node->left);
 
-    if (node->value.money > rank[RANK_MAX-1]->value.money) {
-        rank[RANK_MAX-1]->value.is_ranked = 0;
+    // Compare with last of ranked member
+    info = (member_t*)node->value;
+    if (info->money > ((member_t*)rank[RANK_MAX-1]->value)->money) {
+        // Swap out
+        ((member_t*)rank[RANK_MAX-1]->value)->is_ranked = 0;
+
+        // Find vacant
         for (i = RANK_MAX-1; i > 0; i--) {
-            if (rank[i-1]->value.money < node->value.money) {
+            if (((member_t*)rank[i-1]->value)->money < info->money) {
                 rank[i] = rank[i-1];
             } else {
                 break;
             }
         }
+
+        // Swap in
         rank[i] = node;
-        node->value.is_ranked = 1;
+        info->is_ranked = 1;
     }
 
+    // Do the right node last, (largest id treated last)
     traverse_dfs_node(node->right);
 }
 
-// TODO : improve time complexity from O(n) -> O(log n) or O(1)
-// its a bottleneck
-void op_find_top_five(rb_tree_t *tree) {
+/* Print top 5 members */
+void op_find_top_five() {
     int i;
 
+    // Print ranked member, directly access to ranked array
+    // Time complexity :: O(1)
     for (i = 0; i < 5; i++) {
         if (rank[i] == zero_node) break;
 
-        printf("%d %d\n", rank[i]->value.id, rank[i]->value.money);
+        printf("%d %d\n", rank[i]->key, ((member_t*)rank[i]->value)->money);
     }
 
     if (i == 0) {
@@ -420,68 +494,83 @@ void op_find_top_five(rb_tree_t *tree) {
     }
 }
 
-void op_print_log(rb_tree_t *tree) {
-    // Print log of the account
-
-    int id, log_amount;
-    rb_node_t *node;
+/* Print log of the account */
+void op_print_log() {
+    rb_key_t    id;
+    int         print_size;
+    rb_node_t  *node;
     log_node_t *log;
+    
     int i;
 
-    scanf("%d %d", &id, &log_amount);
+    scanf("%u %d", &id, &print_size);
 
-    if (rb_find(tree, id, &node) == -1) {
+    // If there is no node corresponding to given id
+    if (rb_find(all_members, id, &node) == -1) {
         puts("Not found!");
         return;
     }
 
-    log = node->value.log->head;
-    for (i = 0; i < log_amount; i++) {
+    // Print logs
+    log = ((member_t*)node->value)->log->head;
+    for (i = 0; i < print_size; i++) {
         if (log == NULL) break;
 
-        printf("%d %d\n", log->value.updown, log->value.amount);
-        
+        printf("%d %d\n", log->updown, log->amount);        
         log = log->next;
     }
 
+    // Case of no log
     if (i == 0) {
         puts("0");
     }
 }
 
-void op_buy_area(rb_tree_t *tree) {
-    // Buy the area at the price(or more)
+/* Buy the area at the price(or more) */
+void op_buy_area() {
+    rb_key_t    id;
+    int         x, y, spent;
 
-    int id, x, y, spent;
-    rb_node_t *node, *origin;
-    int approval = 0;
-    log_t log;
+    rb_node_t  *node, *origin;
+    member_t   *info;
+    int         approval;
+
     int i;
 
-    scanf("%d %d %d %d", &id, &x, &y, &spent); 
+    scanf("%u %d %d %d", &id, &x, &y, &spent); 
 
-    if (rb_find(tree, id, &node) == -1) {
+    // If there is no node corresponding to the given id
+    if (rb_find(all_members, id, &node) == -1) {
         puts("Not found!");
         return;
     }
 
-    if (id != area_owner[x][y]) { // purchase is affordable only when it's area of others
+    approval = 0;
+    info = (member_t*)node->value;
+
+    // Do purchase only when it's area of others
+    if (id != area_owner[x][y]) {
 
         // The member should pay affordable price
-        // and current account(money) of the member should be enough to pay over
-        if (spent >= area_price[x][y] && node->value.money >= spent) {
+        // and current account(money) of the member should be enough to pay it over
+        if (spent >= area_price[x][y] && info->money >= spent) {
+            // Set approval flag to 1
             approval = 1;
-            
-            if (area_owner[x][y] != -1) { // case of trade
-                rb_find(tree, area_owner[x][y], &origin);
 
-                origin->value.money += spent;
-                set_level(&origin->value);
+            // Case of trade
+            if (area_owner[x][y] != -1) {
+                // Find the owner of the area
+                rb_find(all_members, area_owner[x][y], &origin);
+                
+                info = (member_t*)origin->value;
 
-                log = (log_t){ UP, spent };
-                log_insert(origin->value.log, log);
+                // Add cash
+                info->money += spent;
+                set_level(info);
+                log_insert(info->log, UP, spent);
 
-                if (origin->value.is_ranked == 1) {
+                // Renew the ranked array
+                if (info->is_ranked == 1) {
                     for (i = 0; i < RANK_MAX; i++) {
                         if (rank[i] == origin) break;
                     }
@@ -493,12 +582,12 @@ void op_buy_area(rb_tree_t *tree) {
                         }
                     }
                     rank[i] = origin;
+                    e++;
 
                 } else {
                     if (rank_cmp(origin, rank[RANK_MAX-1])) {
-                        rank[RANK_MAX-1]->value.is_ranked = 0;
-                        origin->value.is_ranked = 1;
-                        //rank[RANK_MAX-1] = origin;
+                        ((member_t*)rank[RANK_MAX-1]->value)->is_ranked = 0;
+                        info->is_ranked = 1;
 
                         for (i = RANK_MAX-1; i > 0; i--) {
                             if (rank_cmp(origin, rank[i-1])) {
@@ -509,22 +598,23 @@ void op_buy_area(rb_tree_t *tree) {
                         }
                         rank[i] = origin;
                         reset_bound();
+
+                        f++;
                     }
                 }
             }
 
-            node->value.money -= spent;
-            set_level(&node->value);
+            // Proceed the purchase
+            info = (member_t*)node->value;
 
-            log = (log_t){ DOWN, spent };
-            log_insert(node->value.log, log);
+            // Decrease the money of account
+            info->money -= spent;
+            set_level(info);
+            log_insert(info->log, DOWN, spent);
 
-
-            // renew area info
-            area_price[x][y] = spent;
-            area_owner[x][y] = id;
-
-            if (node->value.is_ranked == 1) {
+            // Renew the ranked array
+            // There is no need to doubt to getting in a new node to ranked array
+            if (info->is_ranked == 1) {
                 for (i = 0; i < RANK_MAX; i++) {
                     if (rank[i] == node) break;
                 }
@@ -539,13 +629,20 @@ void op_buy_area(rb_tree_t *tree) {
                 rank[i] = node;
 
                 reset_bound();
+
+                c++;
             }
+
+            // Renew area info
+            area_price[x][y] = spent;
+            area_owner[x][y] = id;
         }
     }
 
-    printf("%d %d %d\n", approval, node->value.money, area_owner[x][y]);
+    printf("%d %d %d\n", approval, info->money, area_owner[x][y]);
 }
 
+/* Create log list */
 log_list_t *log_create() {
     log_list_t *list = NULL;
     
@@ -558,6 +655,7 @@ log_list_t *log_create() {
     return list;
 }
 
+/* Create log node */
 log_node_t *log_create_node() {
     log_node_t *node = NULL;
 
@@ -565,22 +663,60 @@ log_node_t *log_create_node() {
         return NULL;
     }
 
-    node->next = NULL;
-    // memset(&node->value, 0, sizeof(log_t));
+    node->next   = NULL;
+    node->updown = 0;
+    node->amount = 0;
 
     return node;
 }
 
-void log_insert(log_list_t *list, log_t value) {
+/* Delete log list */
+void log_delete(log_list_t *list) {
+    log_node_t *log, *tmp;
+
+    log = list->head;
+    while (log != NULL) {
+        tmp = log->next;
+        free(log);
+        log = tmp;
+    }
+
+    free(list);
+}
+
+/* Insert log to list */
+void log_insert(log_list_t *list, int ud, int amt) {
     log_node_t *node;
 
     node = log_create_node();
-    node->value = value;
+    node->updown = ud;
+    node->amount = amt;
 
     node->next = list->head;
     list->head = node;
 }
 
+/* Create member */
+member_t *create_member() {
+    member_t *member;
+    
+    if ((member = malloc(sizeof(member_t))) == NULL) {
+        return NULL;
+    }
+
+    memset(member, 0, sizeof(member_t));
+    member->log = log_create();
+
+    return member;
+}
+
+/* Delete member */
+void delete_member(member_t *member) {
+    log_delete(member->log);
+    free(member);
+}
+
+/* Create Red-Black Tree */
 rb_tree_t *rb_create() {
     rb_tree_t *tree = NULL;
     
@@ -593,6 +729,7 @@ rb_tree_t *rb_create() {
     return tree;
 }
 
+/* Create Red-Black Node */
 rb_node_t *rb_create_node() {
     rb_node_t *node = NULL;
 
@@ -600,16 +737,86 @@ rb_node_t *rb_create_node() {
         return NULL;
     }
 
-    node->parent = NULL;
-    node->left = NULL;
-    node->right = NULL;
-    //memset(&node->value, 0, sizeof(member_t));
-    node->color = RED;
+    memset(node, 0, sizeof(rb_node_t));
+
+/*  node->parent = NULL;
+    node->left   = NULL;
+    node->right  = NULL;
+
+    node->key    = 0;
+    node->value  = NULL;
+    node->color  = RED;  // default color is RED    */
 
     return node;
 }
 
-rb_node_t *get_sibling(rb_node_t *node) {
+/* Insert {key, value} pair to tree */
+int rb_insert(rb_tree_t *tree, rb_key_t ikey, void *value) {
+    rb_node_t *root;
+    rb_node_t *vacant;
+    rb_node_t *parent;
+    rb_node_t *uncle;
+
+    if (tree->root == NULL) {
+        // Case of empty
+        root = rb_create_node();
+
+        root->key   = ikey;
+        root->value = value;
+        root->color = BLACK;
+
+        tree->root = root;
+        
+    } else {
+        // Common case
+        vacant = tree->root;
+        parent = NULL;
+        
+        while (vacant != NULL) {
+            parent = vacant;
+            
+            if (ikey < vacant->key) {
+                // Go left
+                vacant = vacant->left;
+
+            } else if (ikey > vacant->key) {
+                // Go right
+                vacant = vacant->right;
+
+            } else {
+                // Already exists
+                return -1;
+            }
+        }
+
+        // Create node on the vacant
+        vacant = rb_create_node();
+
+        vacant->parent = parent;
+        vacant->key    = ikey;
+        vacant->value  = value;
+
+        // Setup child pointer of parent
+        if (vacant->key < parent->key) {
+            // Left child
+            parent->left = vacant;
+
+        } else {
+            // Right child
+            parent->right = vacant;
+        }
+
+        // Load balancing
+        if (parent->color == RED) {
+            // Double red occur
+            rb_remedy_double_red(tree, vacant);
+        }
+    }
+    return 0;
+}
+
+/* Get sibling of the node */
+static rb_node_t *get_sibling(rb_node_t *node) {
     rb_node_t *sibling;
 
     if (node->parent == NULL) { // case of root
@@ -625,97 +832,8 @@ rb_node_t *get_sibling(rb_node_t *node) {
     return sibling;
 }
 
-unsigned int rb_insert(rb_tree_t *tree, member_t value) {
-    rb_node_t *root;
-    rb_node_t *vacant;
-    rb_node_t *parent;
-    rb_node_t *uncle;
-
-    unsigned int ret = 0x80000000;   // represents depth on least bits, and result on a most bit
-
-    if (tree->root == NULL) { // case of empty
-        root = rb_create_node();
-        root->value = value;
-        root->value.log = log_create();
-        root->value.is_ranked = 0;
-        root->color = BLACK;
-        
-        tree->root = root;
-        
-    } else {
-        vacant = tree->root;
-        parent = NULL;
-        
-        while (vacant != NULL) {
-            parent = vacant;
-
-            if (value.id < vacant->value.id) { // go left
-                vacant = vacant->left;
-
-            } else if (value.id > vacant->value.id) { // go right 
-                vacant = vacant->right;
-
-            } else { // already exists
-                ret &= 0x7fffffff;
-                break;
-            }
-
-            ++ret;
-        }
-
-        if ((ret & 0x80000000) == 0) {
-            return ret;
-        }
-
-        vacant = rb_create_node();
-        vacant->parent = parent;
-        vacant->value  = value;
-        vacant->value.log = log_create();
-        vacant->value.is_ranked = 0;
-
-        if (vacant->value.id < parent->value.id) {
-            parent->left = vacant;
-        } else {
-            parent->right = vacant;
-        }
-
-        uncle = get_sibling(parent);
-        if (parent->color == RED) { // double red
-            if (uncle != NULL && uncle->color == RED) { // recoloring
-                if (rb_recoloring(tree, parent) != 0) {
-                    --ret;
-                }
-            } else { // restructuring
-                ret -= rb_restructuring(tree, vacant);
-            }
-        } 
-    }
-
-    return ret;
-}
-
-int rb_remedy_double_red(rb_tree_t *tree, rb_node_t *node) {
-    int ret;
-    rb_node_t *parent;
-    rb_node_t *uncle;
-
-    // Double red situation guarantees the node has at least height of 3
-    // So there is no need to doubt that the grand parent is NULL
-
-    parent = node->parent;
-    uncle  = get_sibling(parent);
-
-    if (uncle != NULL && uncle->color == RED) { // recoloring
-        ret = rb_recoloring(tree, parent);
-    } else { // restructuring
-        ret = rb_restructuring(tree, node);
-    }
-
-    return ret;
-}
-    
-int rb_recoloring(rb_tree_t *tree, rb_node_t *node) {
-    int ret = 0;
+/* Recolor two RED nodes to BLACK, and a parent of them to RED */
+static void recoloring(rb_tree_t *tree, rb_node_t *node) {
     rb_node_t *parent;
     rb_node_t *sibling;
 
@@ -727,68 +845,66 @@ int rb_recoloring(rb_tree_t *tree, rb_node_t *node) {
     
     if (parent != tree->root) {
         parent->color = RED;
-
-        if (parent->parent->color == RED) { // propagation
-            ret = rb_remedy_double_red(tree, parent);
+        
+        // Treat propagation
+        if (parent->parent->color == RED) {
+            // Double red propagates
+            rb_remedy_double_red(tree, parent); 
         }
     }
 
     // If parent is root vertex, there is no propagation
     // And root vertex still remain as BLACK node
-
-    return ret;
 }
 
-int restructuring_setup(
+/* Setup pointer information before restructuring */
+static void restructuring_setup(
     rb_node_t *node, rb_node_t **p, rb_node_t **l, rb_node_t **r,
     rb_node_t **lrc, rb_node_t **rlc) {
 
-    rb_node_t *parent;
-    rb_node_t *grand;
+    rb_node_t *parent = node->parent;
+    rb_node_t *grand  = parent->parent;
 
-    parent = node->parent;
-    grand  = parent->parent;
-    
     if (grand->left == parent) {
-        if (parent->left == node) { // left-left
+        if (parent->left == node) {
+            // left-left
             *l = node;               /*     BLACK */
             *r = grand;              /*     /     */
             *p = parent;             /*   RED     */
             *lrc = node->right;      /*   /       */
             *rlc = parent->right;    /* RED       */
-            return 1;
 
-        } else { // left-right
+        } else {
+            // left-right
             *l = parent;             /*   BLACK   */
             *r = grand;              /*   /       */
             *p = node;               /* RED       */
             *lrc = node->left;       /*   \       */
             *rlc = node->right;      /*   RED     */
-            return 2;
         }
 
     } else {
-        if (parent->left == node) { // right-left
+        if (parent->left == node) {
+            // right-left
             *l = grand;              /*  BLACK    */
             *r = parent;             /*      \    */
             *p = node;               /*      RED  */
             *lrc = node->left;       /*      /    */
             *rlc = node->right;      /*     RED   */
-            return 2;
             
-        } else { // right-right
+        } else {
+            // right-right
             *l = grand;              /* BLACK     */
             *r = node;               /*     \     */
             *p = parent;             /*     RED   */
             *lrc = parent->left;     /*       \   */
             *rlc = node->left;       /*       RED */
-            return 1;
         }
     }
 }
 
-int rb_restructuring(rb_tree_t *tree, rb_node_t *node) {
-    int ret;
+/* Restructure the sub-tree of tree */
+static void restructuring(rb_tree_t *tree, rb_node_t *node) {
     rb_node_t *parent;
     rb_node_t *left;
     rb_node_t *right;
@@ -798,33 +914,37 @@ int rb_restructuring(rb_tree_t *tree, rb_node_t *node) {
 
     rb_node_t *grand = node->parent->parent;
 
-    ret = restructuring_setup(node, &parent, &left, &right, &left_right_child, &right_left_child);
+    // Setup pointers (get each position to be restructured)
+    restructuring_setup(
+        node, &parent, &left, &right, &left_right_child, &right_left_child);
 
     // Change color
     parent->color = BLACK;
     left->color   = RED;
     right->color  = RED;
 
-    // Renew children of parent
+    // Renew child pointers
     parent->left  = left;
     parent->right = right;
 
-    // Renew parent pointers
+    left->right = left_right_child;
+    right->left = right_left_child;
+
+    // Renew parents
     parent->parent = grand->parent;
     left->parent   = parent;
     right->parent  = parent;
 
-    // Renew child pointers
-    left->right = left_right_child;
-    right->left = right_left_child;
-
-    // Renew parent of grand child
     if (left_right_child != NULL) left_right_child->parent = left;
     if (right_left_child != NULL) right_left_child->parent = right;
 
-    if (parent->parent == NULL) { // case of root
+    // Connect with ancestor
+    if (parent->parent == NULL) {
+        // Case of root
         tree->root = parent;
+
     } else {
+        // Common case
         if (parent->parent->left == grand) {
             parent->parent->left  = parent;
         } else {
@@ -833,27 +953,48 @@ int rb_restructuring(rb_tree_t *tree, rb_node_t *node) {
     }
 
     // On restructuring, it doesn't propagate to upper layer
-
-    return ret;
 }
 
-int rb_find(rb_tree_t *tree, int id, rb_node_t **found) {
+/* Remedy the double red situation by appropriate solution */
+void rb_remedy_double_red(rb_tree_t *tree, rb_node_t *node) {
+    rb_node_t *parent = node->parent;
+    rb_node_t *uncle  = get_sibling(parent);
+
+    // Double red situation guarantees the node has at least height of 3
+    // So there is no need to doubt that the grand parent is NULL
+
+    if (uncle != NULL && uncle->color == RED) { // recoloring
+        recoloring(tree, parent);
+    } else { // restructuring
+        restructuring(tree, node);
+    }
+}
+
+/* Find the node */
+int rb_find(rb_tree_t *tree, rb_key_t skey, rb_node_t **found) {
     int depth = 0;
-    *found = tree->root;
-    
-    while (*found != NULL) {
-        if (id == (*found)->value.id) { // find!
+    rb_node_t *node = tree->root;
+
+    // Search
+    while (node != NULL) {
+        if (skey== node->key) { // find!
             break;
-        } else if (id < (*found)->value.id) { // go left
-            *found = (*found)->left;
+        } else if (skey < node->key) { // go left
+            node = node->left;
         } else { // go right
-            *found = (*found)->right;
+            node = node->right;
         }
         ++depth;
     }
 
-    if (*found == NULL) {
+    // Fail to find
+    if (node == NULL) {
         depth = -1;
+    }
+
+    // Save the node pointer
+    if (found != NULL) {
+        *found = node;
     }
 
     return depth;
