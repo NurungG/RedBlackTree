@@ -178,24 +178,29 @@ int Setup() {
         exit(1);
     }
 
-    //
+    // Load data from file
     while (1) {
-        // 
         member = create_member();
+
+        // Read data
         if ( fscanf(input, "%u %s %s %d %d %d %d",
                 &id, member->name, member->phone,
                 &member->x, &member->y, &member->level, &member->money) < 0 ) {
             break;
         }
         
+        // Insert to the Red-Black Tree
         rb_insert(all_members, id, (void*)member);
+
+        // Set owner information
         area_owner[member->x][member->y] = id;
     }
     
     delete_member(member);
     fclose(input);
 
-    traverse_dfs(all_members); // set rank array
+    // Set rank array
+    traverse_dfs(all_members);
 
     return 0;
 }
@@ -246,7 +251,6 @@ int execute_operation(char op) {
 
 /* Join to this game */
 void op_join_member() {
-
     rb_key_t id;
     member_t *member;
     int approval, depth;
@@ -256,6 +260,7 @@ void op_join_member() {
     scanf("%u %s %s %d %d",
         &id, member->name, member->phone, &member->x, &member->y);
 
+    // Insert
     if ((approval = rb_insert(all_members, id, (void*)member)) == 0) {
         // If there is no owner in starting area, it becomes belonging of him(or her)
         if (area_owner[member->x][member->y] == -1) {
@@ -265,6 +270,7 @@ void op_join_member() {
         delete_member(member);
     }
     
+    // Get depth of the node
     depth = rb_find(all_members, id, NULL);
 
     printf("%d %d\n", depth, approval+1);
@@ -272,7 +278,6 @@ void op_join_member() {
 
 /* Print information of the member */
 void op_print_info() {
-    
     rb_key_t    id;
     int         depth;
     rb_node_t  *node;
@@ -280,10 +285,11 @@ void op_print_info() {
 
     scanf("%u", &id);
 
+    // Find
     if ((depth = rb_find(all_members, id, &node)) == -1) {
         puts("Not found!");
 
-    } else {            
+    } else {
         info = (member_t*)node->value;
         printf("%s %s %d %d %u\n",
             info->name, info->phone, info->level, info->money, depth);
@@ -292,7 +298,6 @@ void op_print_info() {
 
 /* Set the level depending on current money */
 void set_level(member_t *member) {
-
     if (member->money < 30000) {
         member->level = 0;
 
@@ -755,7 +760,6 @@ int rb_insert(rb_tree_t *tree, rb_key_t ikey, void *value) {
     rb_node_t *root;
     rb_node_t *vacant;
     rb_node_t *parent;
-    rb_node_t *uncle;
 
     if (tree->root == NULL) {
         // Case of empty
